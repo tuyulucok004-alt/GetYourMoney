@@ -40,8 +40,11 @@ form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1
 input,select,button{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
 button{background:var(--save);color:#fff;border:0;font-weight:600;cursor:pointer}
 button.del{background:none;color:var(--out);padding:2px 6px;border:1px solid var(--line);font-weight:400}
+button.edit{background:none;color:var(--save);padding:2px 6px;border:1px solid var(--line);font-weight:400;margin-right:4px}
+button.batal{background:none;color:var(--mute);border:1px solid var(--line);font-weight:400}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--extra);outline-offset:1px}
 #msg{grid-column:1/-1;color:var(--mute);margin:0;font-size:.9rem}
+tr.editing td{background:#fdf3dc}
 [hidden]{display:none!important}
 .login{min-height:100vh;display:grid;place-items:center;padding:20px}
 .login form{display:grid;gap:12px;width:100%;max-width:340px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:24px}
@@ -86,7 +89,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
     <tbody id="rows"></tbody>
   </table></div>
 
-  <h2>Catat transaksi</h2>
+  <h2 id="formTitle">Catat transaksi</h2>
   <div class="box" style="padding:0"><form id="form">
     <input type="month" id="fBulan" required aria-label="Bulan">
     <select id="fKat" aria-label="Jenis transaksi">
@@ -96,7 +99,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
     </select>
     <input type="text" id="fKet" placeholder="Keterangan" maxlength="120" required aria-label="Keterangan">
     <input type="number" id="fJumlah" placeholder="Jumlah (Rp)" min="1" required aria-label="Jumlah">
-    <button type="submit">Simpan</button>
+    <button type="submit" id="fSimpan">Simpan</button>
+    <button type="button" class="batal" id="fBatal" hidden>Batal</button>
     <p id="msg"></p>
   </form></div>
 
@@ -127,7 +131,7 @@ const label = ym => { const [y, m] = ym.split("-"); return BLN[+m - 1] + " " + y
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const sum = a => a.reduce((s, d) => s + d.jumlah, 0);
 
-let DATA = [], months = [];
+let DATA = [], months = [], EDIT_ID = null;
 
 const DEMO = [
   { id: "d1", bulan: "2026-09", jenis: "Pemasukan", kategori: "Tambahan", ket: "Freelance desain", jumlah: 300000 },
@@ -195,9 +199,9 @@ function renderMonth() {
     : "Penghasilan tambahan otomatis menambah tabungan, kecuali kamu pakai untuk pengeluaran.";
 
   $("listLabel").textContent = label(b);
-  $("list").innerHTML = r.length ? r.map(d => `<tr><td>${esc(d.ket) || "-"}</td><td>${esc(d.kategori)}</td>
+  $("list").innerHTML = r.length ? r.map(d => `<tr class="${d.id === EDIT_ID ? "editing" : ""}"><td>${esc(d.ket) || "-"}</td><td>${esc(d.kategori)}</td>
     <td class="${d.jenis === "Pengeluaran" ? "neg" : ""}">${d.jenis === "Pengeluaran" ? "−" : "+"}${rp(d.jumlah).replace("−", "")}</td>
-    <td><button class="del" data-id="${esc(d.id)}" aria-label="Hapus">Hapus</button></td></tr>`).join("")
+    <td><button class="edit" data-edit="${esc(d.id)}" aria-label="Edit">Edit</button><button class="del" data-id="${esc(d.id)}" aria-label="Hapus">Hapus</button></td></tr>`).join("")
     : `<tr><td colspan="4" style="text-align:center;color:var(--mute)">Belum ada transaksi bulan ini. Catat lewat formulir di atas.</td></tr>`;
 }
 
@@ -211,7 +215,7 @@ async function api(body) {
 }
 
 function keluar(msg) {
-  TOKEN = ""; sessionStorage.removeItem("tk"); DATA = [];
+  TOKEN = ""; sessionStorage.removeItem("tk"); DATA = []; selesaiEdit();
   showApp(false); $("loginMsg").textContent = msg || "";
 }
 
@@ -234,12 +238,42 @@ async function load() {
 async function post(body) {
   if (!CONFIG.API_URL) {
     if (body.action === "hapus") DATA = DATA.filter(d => d.id !== body.id);
-    else DATA.push({ id: "x" + Date.now(), bulan: body.bulan, jenis: body.jenis, kategori: body.kategori, ket: body.ket, jumlah: Number(body.jumlah) });
+    else if (body.action === "edit") {
+      DATA = DATA.map(d => d.id === body.id
+        ? { id: d.id, bulan: body.bulan, jenis: body.jenis, kategori: body.kategori, ket: body.ket, jumlah: Number(body.jumlah) } : d);
+    } else DATA.push({ id: "x" + Date.now(), bulan: body.bulan, jenis: body.jenis, kategori: body.kategori, ket: body.ket, jumlah: Number(body.jumlah) });
     render(); return;
   }
   const j = await api(body);
   if (!j.ok) { if (j.error === "unauthorized") { keluar("Sesi habis. Silakan masuk lagi."); return; } throw new Error(j.error || "Gagal"); }
   await load();
+}
+
+/* ===== Mode edit ===== */
+function mulaiEdit(id) {
+  const d = DATA.find(x => x.id === id);
+  if (!d) return;
+  EDIT_ID = id;
+  $("fBulan").value = d.bulan;
+  $("fKat").value = d.kategori;
+  $("fKet").value = d.ket;
+  $("fJumlah").value = d.jumlah;
+  $("formTitle").textContent = "Edit transaksi";
+  $("fSimpan").textContent = "Simpan perubahan";
+  $("fBatal").hidden = false;
+  $("msg").textContent = "Mengedit: " + (d.ket || "-");
+  renderMonth();
+  $("formTitle").scrollIntoView({ behavior: "smooth", block: "center" });
+  $("fKet").focus();
+}
+
+function selesaiEdit() {
+  EDIT_ID = null;
+  $("formTitle").textContent = "Catat transaksi";
+  $("fSimpan").textContent = "Simpan";
+  $("fBatal").hidden = true;
+  $("fKet").value = ""; $("fJumlah").value = "";
+  $("fBulan").value = new Date().toISOString().slice(0, 7);
 }
 
 $("loginForm").addEventListener("submit", async e => {
@@ -260,18 +294,37 @@ $("logout").addEventListener("click", async () => {
 
 $("selBulan").addEventListener("change", renderMonth);
 $("fBulan").value = new Date().toISOString().slice(0, 7);
+
+$("fBatal").addEventListener("click", () => { selesaiEdit(); $("msg").textContent = "Edit dibatalkan."; renderMonth(); });
+
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   const kat = $("fKat").value;
+  const sedangEdit = !!EDIT_ID;
   $("msg").textContent = "Menyimpan…";
   try {
-    await post({ bulan: $("fBulan").value, jenis: kat === "Tambahan" ? "Pemasukan" : "Pengeluaran", kategori: kat, ket: $("fKet").value, jumlah: $("fJumlah").value });
-    $("fKet").value = ""; $("fJumlah").value = ""; $("msg").textContent = "Tersimpan.";
+    await post({
+      action: sedangEdit ? "edit" : "tambah",
+      id: EDIT_ID,
+      bulan: $("fBulan").value,
+      jenis: kat === "Tambahan" ? "Pemasukan" : "Pengeluaran",
+      kategori: kat,
+      ket: $("fKet").value,
+      jumlah: $("fJumlah").value
+    });
+    selesaiEdit();
+    $("msg").textContent = sedangEdit ? "Perubahan tersimpan." : "Tersimpan.";
   } catch (err) { $("msg").textContent = "Gagal menyimpan. Coba lagi."; }
 });
+
 $("list").addEventListener("click", async e => {
-  const id = e.target.dataset && e.target.dataset.id;
-  if (id && confirm("Hapus transaksi ini?")) await post({ action: "hapus", id });
+  const t = e.target;
+  if (t.dataset && t.dataset.edit) return mulaiEdit(t.dataset.edit);
+  const id = t.dataset && t.dataset.id;
+  if (id && confirm("Hapus transaksi ini?")) {
+    if (id === EDIT_ID) selesaiEdit();
+    await post({ action: "hapus", id });
+  }
 });
 
 load();
