@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tabungan Bulanan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap">
+<style>
+:root{--bg:#eaf1ee;--ink:#12302a;--mute:#5d746d;--line:#c9d9d3;--card:#f7faf9;--save:#0f766e;--extra:#b7791f;--out:#b4412f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 "Bricolage Grotesque",system-ui,sans-serif}
+main{max-width:900px;margin:0 auto;padding:40px 20px 64px}
+h1{font-size:1rem;font-weight:600;margin:0 0 4px;color:var(--mute)}
+.hero{font-size:clamp(2.6rem,10vw,5rem);font-weight:800;letter-spacing:-.03em;line-height:1.05;color:var(--save);margin:0}
+.hero.neg{color:var(--out)}
+.sub{color:var(--mute);margin:6px 0 28px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:32px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.stat small{display:block;color:var(--mute)}
+.stat b{font-size:1.3rem;font-weight:600}
+h2{font-size:1.15rem;margin:32px 0 12px}
+.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;min-width:700px}
+th,td{padding:10px 14px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:600;color:var(--mute);font-size:.9rem}
+tr:last-child td{border-bottom:0}
+td.t{font-weight:600;color:var(--save)}
+.neg{color:var(--out)}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.head h2{margin:32px 0 12px}
+.budget{display:grid;gap:16px}
+.line{display:grid;gap:6px}
+.line div:first-child{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.track{height:10px;background:var(--line);border-radius:5px;overflow:hidden}
+.track i{display:block;height:100%;background:var(--save);border-radius:5px}
+.track i.over{background:var(--out)}
+.hint{color:var(--mute);font-size:.85rem}
+form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:16px}
+input,select,button{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+button{background:var(--save);color:#fff;border:0;font-weight:600;cursor:pointer}
+button.del{background:none;color:var(--out);padding:2px 6px;border:1px solid var(--line);font-weight:400}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--extra);outline-offset:1px}
+#msg{grid-column:1/-1;color:var(--mute);margin:0;font-size:.9rem}
+[hidden]{display:none!important}
+.login{min-height:100vh;display:grid;place-items:center;padding:20px}
+.login form{display:grid;gap:12px;width:100%;max-width:340px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:24px}
+.login h1{font-size:1.4rem;color:var(--ink);margin:0}
+.login p{margin:0;color:var(--mute)}
+#loginMsg{min-height:1.4em;color:var(--out);font-size:.9rem}
+</style>
+</head>
+<body>
+<section id="login" class="login" hidden>
+  <form id="loginForm">
+    <h1>Masuk admin</h1>
+    <p>Data tabungan ini bersifat pribadi.</p>
+    <input type="password" id="pw" placeholder="Password" autocomplete="current-password" required aria-label="Password">
+    <button type="submit">Masuk</button>
+    <p id="loginMsg" role="alert"></p>
+  </form>
+</section>
+
+<main id="app" hidden>
+  <div class="head"><h1>Total tabungan saya</h1><button class="del" id="logout">Keluar</button></div>
+  <p class="hero" id="total">Rp 0</p>
+  <p class="sub" id="sub">Memuat data…</p>
+
+  <div class="stats">
+    <div class="box stat"><small>Total income</small><b id="sIncome">–</b></div>
+    <div class="box stat"><small>Total gaji</small><b id="sGaji">–</b></div>
+    <div class="box stat"><small>Total penghasilan tambahan</small><b id="sExtra">–</b></div>
+    <div class="box stat"><small>Total pengeluaran</small><b id="sOut">–</b></div>
+  </div>
+
+  <div class="head">
+    <h2>Anggaran gaji <span id="gajiLabel"></span></h2>
+    <select id="selBulan" aria-label="Pilih bulan"></select>
+  </div>
+  <div class="box budget" id="budget"></div>
+  <p class="hint" id="budgetHint"></p>
+
+  <h2>Rekap per bulan</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Bulan</th><th>Gaji</th><th>Tambahan</th><th>Total income</th><th>Pengeluaran</th><th>Tabungan bulan ini</th><th>Total tabungan</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+
+  <h2>Catat transaksi</h2>
+  <div class="box" style="padding:0"><form id="form">
+    <input type="month" id="fBulan" required aria-label="Bulan">
+    <select id="fKat" aria-label="Jenis transaksi">
+      <option value="Tambahan">Pemasukan tambahan</option>
+      <option value="Kebutuhan">Pengeluaran kebutuhan</option>
+      <option value="Keinginan">Pengeluaran keinginan</option>
+    </select>
+    <input type="text" id="fKet" placeholder="Keterangan" maxlength="120" required aria-label="Keterangan">
+    <input type="number" id="fJumlah" placeholder="Jumlah (Rp)" min="1" required aria-label="Jumlah">
+    <button type="submit">Simpan</button>
+    <p id="msg"></p>
+  </form></div>
+
+  <h2>Transaksi <span id="listLabel"></span></h2>
+  <div class="wrap"><table style="min-width:520px">
+    <thead><tr><th>Keterangan</th><th>Jenis</th><th>Jumlah</th><th></th></tr></thead>
+    <tbody id="list"></tbody>
+  </table></div>
+</main>
+
+<script>
+/* ===== PENGATURAN — edit bagian ini saja ===== */
+const CONFIG = {
+  API_URL: "https://script.google.com/macros/s/AKfycbwLCkKvzt9E1J48XBrD0fGClByggYsz5oVwefehbwhcMr-YoZIgMnS9cz2PoXX1L35L/exec",                    // URL Web App dari Apps Script (Code.gs), berakhiran /exec
+  GAJI_PER_BULAN: 2000000,
+  BULAN_MULAI: "2026-01",         // bulan pertama kamu mulai mencatat (YYYY-MM)
+  // Pembagian gaji (total harus 100)
+  PERSEN_KEBUTUHAN: 60,           // makan, kost/listrik, transport, pulsa
+  PERSEN_KEINGINAN: 15,           // jajan, hiburan, belanja
+  PERSEN_TABUNGAN: 25             // tabungan + dana darurat
+};
+/* ============================================= */
+
+const rp = n => (n < 0 ? "−" : "") + "Rp " + Math.abs(Math.round(n)).toLocaleString("id-ID");
+const $ = id => document.getElementById(id);
+const BLN = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+const label = ym => { const [y, m] = ym.split("-"); return BLN[+m - 1] + " " + y; };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const sum = a => a.reduce((s, d) => s + d.jumlah, 0);
+
+let DATA = [], months = [];
+
+const DEMO = [
+  { id: "d1", bulan: "2026-09", jenis: "Pemasukan", kategori: "Tambahan", ket: "Freelance desain", jumlah: 300000 },
+  { id: "d2", bulan: "2026-10", jenis: "Pengeluaran", kategori: "Kebutuhan", ket: "Makan & transport", jumlah: 900000 },
+  { id: "d3", bulan: "2026-10", jenis: "Pengeluaran", kategori: "Keinginan", ket: "Jajan", jumlah: 150000 }
+];
+
+function buildMonths() {
+  const now = new Date(), cur = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+  const set = new Set();
+  let [y, m] = CONFIG.BULAN_MULAI.split("-").map(Number);
+  while (y + "-" + String(m).padStart(2, "0") <= cur) { set.add(y + "-" + String(m).padStart(2, "0")); if (++m > 12) { m = 1; y++; } }
+  DATA.forEach(d => set.add(d.bulan));
+  months = [...set].sort();
+  const keep = $("selBulan").value || cur;
+  $("selBulan").innerHTML = months.slice().reverse().map(b => `<option value="${b}">${label(b)}</option>`).join("");
+  $("selBulan").value = months.includes(keep) ? keep : months[months.length - 1];
+}
+
+function render() {
+  buildMonths();
+  const G = CONFIG.GAJI_PER_BULAN;
+  let cum = 0, tI = 0, tE = 0, tO = 0, html = "";
+  months.forEach(b => {
+    const r = DATA.filter(d => d.bulan === b);
+    const extra = sum(r.filter(d => d.jenis === "Pemasukan"));
+    const out = sum(r.filter(d => d.jenis === "Pengeluaran"));
+    const income = G + extra, net = income - out;
+    cum += net; tI += income; tE += extra; tO += out;
+    html += `<tr><td>${label(b)}</td><td>${rp(G)}</td><td>${rp(extra)}</td><td>${rp(income)}</td>
+      <td class="${out ? "neg" : ""}">${rp(out)}</td><td class="${net < 0 ? "neg" : ""}">${rp(net)}</td><td class="t">${rp(cum)}</td></tr>`;
+  });
+  $("rows").innerHTML = html;
+  $("total").textContent = rp(cum); $("total").className = "hero" + (cum < 0 ? " neg" : "");
+  $("sub").textContent = `Setelah dikurangi semua pengeluaran · ${months.length} bulan · rata-rata ${rp(cum / months.length)} per bulan`;
+  $("sIncome").textContent = rp(tI); $("sGaji").textContent = rp(G * months.length);
+  $("sExtra").textContent = rp(tE); $("sOut").textContent = rp(tO);
+  renderMonth();
+}
+
+function renderMonth() {
+  const b = $("selBulan").value, G = CONFIG.GAJI_PER_BULAN;
+  const r = DATA.filter(d => d.bulan === b);
+  const kebutuhan = sum(r.filter(d => d.kategori === "Kebutuhan" && d.jenis === "Pengeluaran"));
+  const keinginan = sum(r.filter(d => d.kategori === "Keinginan" && d.jenis === "Pengeluaran"));
+  const extra = sum(r.filter(d => d.jenis === "Pemasukan"));
+  const tabung = G + extra - kebutuhan - keinginan;
+  const bK = G * CONFIG.PERSEN_KEBUTUHAN / 100, bI = G * CONFIG.PERSEN_KEINGINAN / 100, bT = G * CONFIG.PERSEN_TABUNGAN / 100;
+  $("gajiLabel").textContent = rp(G);
+
+  const line = (nama, persen, pakai, batas, isSave) => {
+    const pct = batas > 0 ? Math.min(100, Math.max(0, pakai / batas * 100)) : 0;
+    const bad = isSave ? false : pakai > batas;
+    const ket = isSave ? `terkumpul ${rp(pakai)} dari target ${rp(batas)}`
+      : bad ? `melebihi batas ${rp(pakai - batas)}` : `sisa ${rp(batas - pakai)}`;
+    return `<div class="line"><div><span><b>${nama}</b> ${persen}% · batas ${rp(batas)}</span><span class="${bad ? "neg" : ""}">${isSave ? "" : rp(pakai) + " · "}${ket}</span></div>
+      <div class="track"><i class="${bad ? "over" : ""}" style="width:${pct}%"></i></div></div>`;
+  };
+  $("budget").innerHTML =
+    line("Kebutuhan pokok", CONFIG.PERSEN_KEBUTUHAN, kebutuhan, bK, false) +
+    line("Keinginan", CONFIG.PERSEN_KEINGINAN, keinginan, bI, false) +
+    line("Tabungan & dana darurat", CONFIG.PERSEN_TABUNGAN, tabung, bT, true);
+  $("budgetHint").textContent = extra
+    ? `Penghasilan tambahan ${rp(extra)} bulan ini sudah ikut dihitung sebagai tabungan.`
+    : "Penghasilan tambahan otomatis menambah tabungan, kecuali kamu pakai untuk pengeluaran.";
+
+  $("listLabel").textContent = label(b);
+  $("list").innerHTML = r.length ? r.map(d => `<tr><td>${esc(d.ket) || "-"}</td><td>${esc(d.kategori)}</td>
+    <td class="${d.jenis === "Pengeluaran" ? "neg" : ""}">${d.jenis === "Pengeluaran" ? "−" : "+"}${rp(d.jumlah).replace("−", "")}</td>
+    <td><button class="del" data-id="${esc(d.id)}" aria-label="Hapus">Hapus</button></td></tr>`).join("")
+    : `<tr><td colspan="4" style="text-align:center;color:var(--mute)">Belum ada transaksi bulan ini. Catat lewat formulir di atas.</td></tr>`;
+}
+
+let TOKEN = sessionStorage.getItem("tk") || "";
+
+function showApp(on) { $("app").hidden = !on; $("login").hidden = on; if (!on) $("pw").focus(); }
+
+async function api(body) {
+  const res = await fetch(CONFIG.API_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ ...body, token: TOKEN }) });
+  return res.json();
+}
+
+function keluar(msg) {
+  TOKEN = ""; sessionStorage.removeItem("tk"); DATA = [];
+  showApp(false); $("loginMsg").textContent = msg || "";
+}
+
+async function load() {
+  if (!CONFIG.API_URL) {
+    DATA = DEMO.slice(); $("logout").hidden = true; showApp(true); render();
+    $("msg").textContent = "Mode contoh (tanpa login): isi API_URL di index.html agar tersambung ke spreadsheet."; return;
+  }
+  if (!TOKEN) { showApp(false); return; }
+  try {
+    const j = await api({ action: "baca" });
+    if (!j.ok) { if (j.error === "unauthorized") return keluar("Sesi habis. Silakan masuk lagi."); throw new Error(j.error); }
+    DATA = j.data; showApp(true); render();
+  } catch (e) {
+    showApp(true); DATA = []; render();
+    $("sub").textContent = "Gagal memuat data dari Apps Script. Cek API_URL dan pengaturan akses (Anyone).";
+  }
+}
+
+async function post(body) {
+  if (!CONFIG.API_URL) {
+    if (body.action === "hapus") DATA = DATA.filter(d => d.id !== body.id);
+    else DATA.push({ id: "x" + Date.now(), bulan: body.bulan, jenis: body.jenis, kategori: body.kategori, ket: body.ket, jumlah: Number(body.jumlah) });
+    render(); return;
+  }
+  const j = await api(body);
+  if (!j.ok) { if (j.error === "unauthorized") { keluar("Sesi habis. Silakan masuk lagi."); return; } throw new Error(j.error || "Gagal"); }
+  await load();
+}
+
+$("loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("loginMsg").textContent = "Memeriksa…";
+  try {
+    const j = await api({ action: "login", password: $("pw").value });
+    $("pw").value = "";
+    if (!j.ok) { $("loginMsg").textContent = j.error || "Gagal masuk."; return; }
+    TOKEN = j.token; sessionStorage.setItem("tk", TOKEN); $("loginMsg").textContent = "";
+    load();
+  } catch (err) { $("loginMsg").textContent = "Tidak bisa terhubung ke server."; }
+});
+$("logout").addEventListener("click", async () => {
+  try { await api({ action: "logout" }); } catch (e) {}
+  keluar("");
+});
+
+$("selBulan").addEventListener("change", renderMonth);
+$("fBulan").value = new Date().toISOString().slice(0, 7);
+$("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const kat = $("fKat").value;
+  $("msg").textContent = "Menyimpan…";
+  try {
+    await post({ bulan: $("fBulan").value, jenis: kat === "Tambahan" ? "Pemasukan" : "Pengeluaran", kategori: kat, ket: $("fKet").value, jumlah: $("fJumlah").value });
+    $("fKet").value = ""; $("fJumlah").value = ""; $("msg").textContent = "Tersimpan.";
+  } catch (err) { $("msg").textContent = "Gagal menyimpan. Coba lagi."; }
+});
+$("list").addEventListener("click", async e => {
+  const id = e.target.dataset && e.target.dataset.id;
+  if (id && confirm("Hapus transaksi ini?")) await post({ action: "hapus", id });
+});
+
+load();
+</script>
+</body>
+</html>
